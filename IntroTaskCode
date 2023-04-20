@@ -1,0 +1,135 @@
+#include <opencv2/opencv.hpp>
+#include <iostream>
+
+using namespace std;
+using namespace cv;
+
+int main()
+{
+    Mat image1 = imread("PinkChair.png");// reads and write image data into Mat variable
+    Mat image_HSV1;// mat variable for HSV image
+    cvtColor(image1, image_HSV1, COLOR_BGR2HSV); // Convert the image to HSV
+   //change file to either BlueApple, BlueCar, RedApple, RedCar, GreenCar, GreenApple
+
+   if (image1.data == NULL)
+{
+        cout << "No image1 found! Check path." << endl;
+    return 1;   //ERROR
+}
+else
+{
+
+cv::Mat binary;
+cv::cvtColor(image_HSV1, binary, cv::COLOR_BGR2GRAY); // Convert to grayscale
+cv::threshold(binary, binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU); // Threshold to binary image
+
+// Perform Bilateral Blurring
+cv::Mat bblurred;
+cv::bilateralFilter(binary, bblurred, 10, 20, 10);
+
+// Perform erosion on the binary image
+cv::Mat spotFilter = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
+cv::Mat eroded;
+cv::erode(bblurred, eroded, spotFilter);
+
+// Perform dilation on the eroded image
+cv::Mat maskMorph = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(10, 10));
+cv::Mat dilated;
+cv::dilate(eroded, dilated, maskMorph);
+
+// Perform opening operation on the thresholded image
+cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
+cv::Mat morphed;
+cv::morphologyEx(binary, morphed, cv::MORPH_OPEN, kernel);
+
+std::vector<std::vector<cv::Point> > contours;
+std::vector<cv::Vec4i> hierarchy;
+cv::findContours(morphed, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0)); // Find contours
+
+std::vector<std::vector<cv::Point> > approxedcontours(contours.size()); // Array for new contours
+for (int i = 0; i < contours.size(); i++)
+{
+    cv::approxPolyDP(contours[i], approxedcontours[i], 10, true); // Approximate the contour
+}
+
+cv::drawContours(image_HSV1, approxedcontours, -1, cv::Scalar(0, 0, 0), 2); // Draw the approximated contours on the image
+
+cv::Rect bounding_rect = cv::boundingRect(approxedcontours[0]); // Find the bounding rectangle around the contours
+for (int i = 1; i < approxedcontours.size(); i++)
+{
+    bounding_rect |= cv::boundingRect(approxedcontours[i]);
+}
+
+cv::rectangle(image_HSV1, bounding_rect, cv::Scalar(0, 0, 0),LINE_8); // Draw the bounding rectangle on the image
+
+
+// Define the HSV threshold for blue colour
+cv::Scalar lower_blue(97, 40, 23);
+cv::Scalar upper_blue(120, 255, 250);
+
+// Define the HSV threshold for red colour
+cv::Scalar lower_red(165, 35, 40);
+cv::Scalar upper_red(185, 245, 245);
+
+// Define the HSV threshold for green colour
+cv::Scalar lower_green(75, 55, 40);
+cv::Scalar upper_green(95, 255, 255);
+
+// Define the HSV threshold for pink colour
+cv::Scalar lower_pink(128, 0, 128);
+cv::Scalar upper_pink(218, 112,214);
+
+// Threshold the image to get only blue pixels
+cv::Mat blue_binary;
+cv::inRange(image_HSV1, lower_blue, upper_blue, blue_binary);
+
+// Threshold the image to get only red pixels
+cv::Mat red_binary;
+cv::inRange(image_HSV1, lower_red, upper_red, red_binary);
+
+// Threshold the image to get only green pixels
+cv::Mat green_binary;
+cv::inRange(image_HSV1, lower_green, upper_green, green_binary);
+
+// Threshold the image to get only pink pixels
+cv::Mat pink_binary;
+cv::inRange(image_HSV1, lower_pink, upper_pink, pink_binary);
+
+// Count the number of blue pixels within the bounding_rect
+cv::Mat blue_roi(blue_binary, bounding_rect);
+int blue_count = cv::countNonZero(blue_roi);
+std::cout << "Number of blue pixels within bounding rectangle: " << blue_count << std::endl;
+
+// Count the number of red pixels within the bounding_rect
+cv::Mat red_roi(red_binary, bounding_rect);
+int red_count = cv::countNonZero(red_roi);
+std::cout << "Number of red pixels within bounding rectangle: " << red_count << std::endl;
+
+// Count the number of green pixels within the bounding_rect
+cv::Mat green_roi(green_binary, bounding_rect);
+int green_count = cv::countNonZero(green_roi);
+std::cout << "Number of green pixels within bounding rectangle: " << green_count << std::endl;
+
+// Count the number of pink pixels within the bounding_rect
+cv::Mat pink_roi(pink_binary, bounding_rect);
+int pink_count = cv::countNonZero(pink_roi);
+std::cout << "Number of pink pixels within bounding rectangle: " << pink_count << std::endl;
+
+if (blue_count > green_count && blue_count > red_count && blue_count > pink_count && blue_count > 1000)
+    std::cout << "The object is blue" << std::endl;
+else if (green_count > blue_count && green_count > red_count && green_count > pink_count && green_count > 1000)
+    std::cout << "The object is green" << std::endl;
+else if (red_count > blue_count && red_count > green_count && red_count > pink_count && red_count > 1000)
+    std::cout << "The object is red" << std::endl;
+else if (pink_count > blue_count && pink_count > green_count && pink_count > red_count && pink_count > 1000)
+    std::cout << "The object is pink" << std::endl;
+else
+    std::cout << "Colour of object was not found" << std::endl;
+
+    namedWindow("1", CV_WINDOW_AUTOSIZE); //display images
+    imshow("1", image_HSV1);
+
+    waitKey();
+}
+    return 0;//OK
+}
